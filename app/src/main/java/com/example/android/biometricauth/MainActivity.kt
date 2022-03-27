@@ -16,6 +16,8 @@
 
 package com.example.android.biometricauth
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
@@ -25,6 +27,7 @@ import androidx.appcompat.widget.AppCompatTextView
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import com.google.gson.Gson
 import java.nio.charset.Charset
 
 class MainActivity : AppCompatActivity() {
@@ -38,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var secretKeyName: String
     private lateinit var ciphertext:ByteArray
     private lateinit var initializationVector: ByteArray
+    private lateinit var spefs: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,6 +56,34 @@ class MainActivity : AppCompatActivity() {
         textOutputView = findViewById(R.id.output_view)
         findViewById<Button>(R.id.encrypt_button).setOnClickListener { authenticateToEncrypt() }
         findViewById<Button>(R.id.decrypt_button).setOnClickListener { authenticateToDecrypt() }
+        spefs = getSharedPreferences("my_spefs", Context.MODE_PRIVATE)
+
+        getFromSpefs()
+        if (this::ciphertext.isInitialized) {
+            authenticateToDecrypt()
+        }
+    }
+
+    private fun getFromSpefs() {
+        try {
+            val json = spefs.getString("data", null)
+            val gson = Gson().fromJson(json, EncryptedData::class.java)
+            ciphertext = gson.ciphertext
+            initializationVector = gson.initializationVector
+        }catch (e: Exception)
+        {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveToSpefs(encryptedData: EncryptedData) {
+        try {
+            val json = Gson().toJson(encryptedData)
+            spefs.edit().putString("data", json).apply()
+        }catch (e: Exception)
+        {
+            e.printStackTrace()
+        }
     }
 
     private fun createBiometricPrompt(): BiometricPrompt {
@@ -120,6 +152,7 @@ class MainActivity : AppCompatActivity() {
             ciphertext = encryptedData.ciphertext
             initializationVector = encryptedData.initializationVector
 
+            saveToSpefs(encryptedData)
             String(ciphertext, Charset.forName("UTF-8"))
         } else {
             cryptographyManager.decryptData(ciphertext, cryptoObject?.cipher!!)
